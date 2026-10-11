@@ -43,6 +43,44 @@ int group_probe(Group group, char mask);
 
 long hash_string(char* str);
 
+void* map_new(char* key_type, char* value_type, int len) {
+    if (len <= 8) {
+        // создаем только группу
+    }
+
+    Slot* slot = malloc(sizeof(Slot));
+    Slot** slots_arr = malloc(sizeof(Slot) * 1);
+    slots_arr[0] = slot;
+
+    Group* group = malloc(sizeof(Group));
+    group->slots = slots_arr;
+    group->len = 1;
+    group->control_word = 0;
+
+    Group** groups_arr = malloc(sizeof(Group) * 1);
+    groups_arr[0] = group;
+
+    Table* table = malloc(sizeof(Table));
+    table->groups = groups_arr;
+    table->len = 1;
+    table->local_depth = 1;
+
+    Table** tables_arr = malloc(sizeof(Table) * 1);
+    tables_arr[0] = table;
+
+    Directory* dir = malloc(sizeof(Directory));
+    dir->tables = tables_arr;
+    dir->len = 1;
+
+    Map* map = malloc(sizeof(Map));
+    map->len = 0;
+    map->global_depth = 1;
+    map->dir_ptr = (void*)dir;
+    map->dir_len = dir->len;
+
+    return (void*)map;
+}
+
 void map_set(void* map_ptr, char* key, char* value) {
     Map* map = (Map*)map_ptr;
     long hash = hash_string(key);
