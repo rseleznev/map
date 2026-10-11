@@ -14,19 +14,19 @@ typedef struct Map {
 } Map;
 
 typedef struct Directory {
-    Table* tables;
+    Table** tables;
     int len;
 } Directory;
 
 typedef struct Table {
-    Group* groups;
+    Group** groups;
     int len;
 
     int local_depth;
 } Table;
 
 typedef struct Group {
-    Slot* slots;
+    Slot** slots;
     int len;
 
     long control_word;
@@ -39,7 +39,7 @@ typedef struct Slot {
 void* map_new(char* key_type, char* value_type, int len);
 void map_set_key(void* map_ptr, char* key, char* value);
 
-int group_probe(Group group, char mask);
+int group_probe(Group* group, char mask);
 
 long hash_string(char* str);
 
@@ -91,12 +91,12 @@ void map_set_key(void* map_ptr, char* key, char* value) {
 
     char h1_mask = (h1 << (8 - map->global_depth)) >> (8 - map->global_depth); // временное решение!!
     Directory* dir = (Directory*)(map->dir_ptr);
-    Table table = dir->tables[(int)h1 & h1_mask];
+    Table* table = dir->tables[(int)h1 & h1_mask];
 
     // поиск по группам
-    for (int i = 0; i < table.len; i++) {
+    for (int i = 0; i < table->len; i++) {
         int res = 0;
-        res = group_probe(table.groups[i], h2);
+        res = group_probe(table->groups[i], h2);
         if (res == 1) {
             // ищем в самой группе
 
@@ -105,8 +105,8 @@ void map_set_key(void* map_ptr, char* key, char* value) {
     }
 }
 
-int group_probe(Group group, char mask) {
-    __m128i vector = _mm_loadl_epi64((__m128i*)group.control_word);
+int group_probe(Group* group, char mask) {
+    __m128i vector = _mm_loadl_epi64((__m128i*)group->control_word);
     __m128i mask_vector = _mm_set1_epi8(mask);
     __m128i cmp = _mm_cmpeq_epi8(vector, mask_vector);
 
