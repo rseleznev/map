@@ -37,7 +37,7 @@ typedef struct Slot {
 } Slot;
 
 void* map_new(char* key_type, char* value_type, int len);
-void map_set(void* map_ptr, char* key, char* value);
+void map_set_key(void* map_ptr, char* key, char* value);
 
 int group_probe(Group group, char mask);
 
@@ -81,7 +81,7 @@ void* map_new(char* key_type, char* value_type, int len) {
     return (void*)map;
 }
 
-void map_set(void* map_ptr, char* key, char* value) {
+void map_set_key(void* map_ptr, char* key, char* value) {
     Map* map = (Map*)map_ptr;
     long hash = hash_string(key);
     long h1 = (hash >> 7) & 0xFFFF; // 57 старших битов
