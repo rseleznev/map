@@ -50,24 +50,26 @@ void* map_new(char* key_type, char* value_type, int len) {
         // создаем только группу
     }
 
-    Group* group = malloc(sizeof(Group));
-    group->control_word = 0;
-    group->slots[0].status = 0;
-    group->slots[1].status = 0;
-    group->slots[2].status = 0;
-    group->slots[3].status = 0;
-    group->slots[4].status = 0;
-    group->slots[5].status = 0;
-    group->slots[6].status = 0;
-    group->slots[7].status = 0;
+    int table_len = 2;
+    while (1) {
+        if (table_len * 7 <= len) {
+            table_len *= 2;
+            continue;
+        }
+        break;
+    }
 
-    Group** groups_arr = malloc(sizeof(Group) * 1);
-    groups_arr[0] = group;
+    Group** groups_arr = malloc(sizeof(Group) * table_len);
+
+    for (int group_idx = 0; group_idx < table_len; group_idx++) {
+        Group* group = calloc(1, sizeof(Group));
+        groups_arr[group_idx] = group;
+    }
 
     Table* table = malloc(sizeof(Table));
     table->groups = groups_arr;
-    table->len = 1;
-    table->local_depth = 1;
+    table->len = table_len;
+    table->local_depth = 0;
 
     Table** tables_arr = malloc(sizeof(Table) * 1);
     tables_arr[0] = table;
@@ -77,8 +79,8 @@ void* map_new(char* key_type, char* value_type, int len) {
     dir->len = 1;
 
     Map* map = malloc(sizeof(Map));
-    map->len = 0;
-    map->global_depth = 1;
+    map->len = 1;
+    map->global_depth = 0;
     map->dir_ptr = (void*)dir;
     map->dir_len = dir->len;
 
