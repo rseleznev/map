@@ -1,4 +1,5 @@
 #include "map.h"
+#include <stdio.h>
 #include <immintrin.h>
 
 typedef struct Map {
@@ -11,23 +12,6 @@ typedef struct Map {
     int dir_len;
 } Map;
 
-typedef struct Directory {
-    Table** tables;
-    int len;
-} Directory;
-
-typedef struct Table {
-    Group** groups;
-    int len;
-
-    int local_depth;
-} Table;
-
-typedef struct Group {
-    Slot slots[8];
-    long control_word;
-} Group;
-
 typedef struct Slot {
     void* key;
     int key_len;
@@ -38,14 +22,31 @@ typedef struct Slot {
     char status;
 } Slot;
 
-void* map_new(char* key_type, char* value_type, int len);
+typedef struct Group {
+    Slot slots[8];
+    long control_word;
+} Group;
+
+typedef struct Table {
+    Group** groups;
+    int len;
+
+    int local_depth;
+} Table;
+
+typedef struct Directory {
+    Table** tables;
+    int len;
+} Directory;
+
+void* map_new(int len);
 void map_set_key(void* map_ptr, char* key, char* value);
 
 int group_probe(Group* group, char mask);
 
 long hash_string(char* str);
 
-void* map_new(char* key_type, char* value_type, int len) {
+void* map_new(int len) {
     if (len <= 8) {
         // создаем только группу
     }
@@ -107,6 +108,7 @@ void map_set_key(void* map_ptr, char* key, char* value) {
     char h2 = (char)hash & (0xFF >> 1); // 7 младших битов
 
     Group* group = table->groups[(int)h1 & (table->len-1)];
+    printf("slot 0 status: %d \n", group->slots[0].status);
 }
 
 int group_probe(Group* group, char mask) {
@@ -116,4 +118,8 @@ int group_probe(Group* group, char mask) {
 
     int bits = _mm_movemask_epi8(cmp);
     return bits != 0;
+}
+
+long hash_string(char* str) {
+    return 0;
 }
