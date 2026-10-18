@@ -26,14 +26,18 @@ typedef struct Table {
 } Table;
 
 typedef struct Group {
-    Slot** slots;
-    int len;
-
+    Slot slots[8];
     long control_word;
 } Group;
 
 typedef struct Slot {
-    void* data[8];
+    void* key;
+    int key_len;
+
+    void* value;
+    int value_len;
+
+    char status;
 } Slot;
 
 void* map_new(char* key_type, char* value_type, int len);
@@ -48,14 +52,16 @@ void* map_new(char* key_type, char* value_type, int len) {
         // создаем только группу
     }
 
-    Slot* slot = malloc(sizeof(Slot));
-    Slot** slots_arr = malloc(sizeof(Slot) * 1);
-    slots_arr[0] = slot;
-
     Group* group = malloc(sizeof(Group));
-    group->slots = slots_arr;
-    group->len = 1;
     group->control_word = 0;
+    group->slots[0].status = 0;
+    group->slots[1].status = 0;
+    group->slots[2].status = 0;
+    group->slots[3].status = 0;
+    group->slots[4].status = 0;
+    group->slots[5].status = 0;
+    group->slots[6].status = 0;
+    group->slots[7].status = 0;
 
     Group** groups_arr = malloc(sizeof(Group) * 1);
     groups_arr[0] = group;
