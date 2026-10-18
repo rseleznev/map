@@ -2,7 +2,7 @@
 #include <immintrin.h>
 
 typedef struct Map {
-    int len;
+    int entries_len;
 
     int hash_seed;
     int global_depth;
@@ -79,7 +79,7 @@ void* map_new(char* key_type, char* value_type, int len) {
     dir->len = 1;
 
     Map* map = malloc(sizeof(Map));
-    map->len = 1;
+    map->entries_len = 0;
     map->global_depth = 0;
     map->dir_ptr = (void*)dir;
     map->dir_len = dir->len;
@@ -90,25 +90,23 @@ void* map_new(char* key_type, char* value_type, int len) {
 void map_set_key(void* map_ptr, char* key, char* value) {
     Map* map = (Map*)map_ptr;
     long hash = hash_string(key);
-    long h1 = (hash >> 7) & 0xFFFFFFFFFFFFFFFF; // 57 старших битов
-    char h2 = (char)hash & (0xFF >> 1); // 7 младших битов
 
     // если map->dir_len == 0, значит работаем напрямую с группой
 
-    char h1_mask = (h1 << (8 - map->global_depth)) >> (8 - map->global_depth); // временное решение!!
     Directory* dir = (Directory*)(map->dir_ptr);
-    Table* table = dir->tables[(int)h1 & h1_mask];
+    Table* table = NULL;
 
-    // поиск по группам
-    for (int i = 0; i < table->len; i++) {
-        int res = 0;
-        res = group_probe(table->groups[i], h2);
-        if (res == 1) {
-            // ищем в самой группе
-
-            break;
-        }
+    if (map->global_depth == 0) {
+        table = dir->tables[0];
     }
+    else {
+        table = dir->tables[(int)hash >> (64 - map->global_depth)];
+    }
+    
+    long h1 = (hash >> 7) & 0xFFFFFFFFFFFFFFFF; // 57 старших битов
+    char h2 = (char)hash & (0xFF >> 1); // 7 младших битов
+
+    Group* group = table->groups[(int)h1 & (table->len-1)];
 }
 
 int group_probe(Group* group, char mask) {
