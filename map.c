@@ -1,16 +1,7 @@
 #include "map.h"
-#include <stdio.h>
-#include <immintrin.h>
-
-typedef struct Map {
-    int entries_len;
-
-    int hash_seed;
-    int global_depth;
-
-    void* dir_ptr; // ссылка на директорию или группу
-    int dir_len;
-} Map;
+#include <stdlib.h>
+// #include <immintrin.h>
+#include <mmintrin.h>
 
 typedef struct Slot {
     void* key;
@@ -32,6 +23,7 @@ typedef struct Table {
     int len;
 
     int local_depth;
+    int free_slots_len;
 } Table;
 
 typedef struct Directory {
@@ -39,9 +31,20 @@ typedef struct Directory {
     int len;
 } Directory;
 
+typedef struct Map {
+    int entries_len;
+
+    int hash_seed;
+    int global_depth;
+
+    void* dir_ptr; // ссылка на директорию или группу
+    int dir_len;
+} Map;
+
 void* map_new(int len);
 void map_set_key(void* map_ptr, char* key, char* value);
 
+int group_first_free_slot_idx(Group* group);
 int group_probe(Group* group, char mask);
 
 long hash_string(char* str);
@@ -51,26 +54,31 @@ void* map_new(int len) {
         // создаем только группу
     }
 
-    int table_len = 2;
+    int groups_amount = 2;
     while (1) {
-        if (table_len * 7 <= len) {
-            table_len *= 2;
+        if (groups_amount * 7 <= len) {
+            groups_amount *= 2;
             continue;
         }
         break;
     }
 
-    Group** groups_arr = malloc(sizeof(Group) * table_len);
+    if (groups_amount > 1024) {
+        // создаем несколько таблиц
+    }
 
-    for (int group_idx = 0; group_idx < table_len; group_idx++) {
+    Group** groups_arr = malloc(sizeof(Group) * groups_amount);
+
+    for (int group_idx = 0; group_idx < groups_amount; group_idx++) {
         Group* group = calloc(1, sizeof(Group));
         groups_arr[group_idx] = group;
     }
 
     Table* table = malloc(sizeof(Table));
     table->groups = groups_arr;
-    table->len = table_len;
+    table->len = groups_amount;
     table->local_depth = 0;
+    table->free_slots_len = groups_amount * 7;
 
     Table** tables_arr = malloc(sizeof(Table) * 1);
     tables_arr[0] = table;
@@ -108,17 +116,32 @@ void map_set_key(void* map_ptr, char* key, char* value) {
     char h2 = (char)hash & (0xFF >> 1); // 7 младших битов
 
     Group* group = table->groups[(int)h1 & (table->len-1)];
-    printf("slot 0 status: %d \n", group->slots[0].status);
+    
 }
 
-int group_probe(Group* group, char mask) {
-    __m128i vector = _mm_loadl_epi64((__m128i*)group->control_word);
-    __m128i mask_vector = _mm_set1_epi8(mask);
-    __m128i cmp = _mm_cmpeq_epi8(vector, mask_vector);
+int group_first_free_slot_idx(Group* group) {
+    // __m64 vector = _mm_set_pi8(group->slots[0].status, group->slots[1].status, group->slots[2].status,
+    // group->slots[3].status, group->slots[4].status, group->slots[5].status, group->slots[6].status,
+    // group->slots[7].status);
+    __m64 vector = _m_from_int64(group->control_word);
 
-    int bits = _mm_movemask_epi8(cmp);
-    return bits != 0;
+    __m64 vector_mask = _mm_set1_pi8((unsigned char)128);
+    __m64 cmp = _mm_cmpeq_pi8(vector, vector_mask);
+
+    long value = _m_to_int64(cmp);
+    char mask = ( ((unsigned char)(value >> 49) & (unsigned char)128) | ((char)value >> 42) | ((char)value >> 35) |  ((char)value >> 28) |
+    ((char)value >> 21) | ((char)value >> 15) | ((char)value)
+    );
 }
+
+// int group_probe(Group* group, char mask) {
+//     __m128i vector = _mm_loadl_epi64((__m128i*)group->control_word);
+//     __m128i mask_vector = _mm_set1_epi8(mask);
+//     __m128i cmp = _mm_cmpeq_epi8(vector, mask_vector);
+
+//     int bits = _mm_movemask_epi8(cmp);
+//     return bits != 0;
+// }
 
 long hash_string(char* str) {
     return 0;
