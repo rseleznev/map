@@ -84,7 +84,7 @@ void* map_new(char* key_type, char* value_type, int len) {
 void map_set_key(void* map_ptr, char* key, char* value) {
     Map* map = (Map*)map_ptr;
     long hash = hash_string(key);
-    long h1 = (hash >> 7) & 0xFFFF; // 57 старших битов
+    long h1 = (hash >> 7) & 0xFFFFFFFFFFFFFFFF; // 57 старших битов
     char h2 = (char)hash & (0xF >> 1); // 7 младших битов
 
     // если map->dir_len == 0, значит работаем напрямую с группой
