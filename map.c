@@ -2,8 +2,6 @@
 #include <immintrin.h>
 
 typedef struct Map {
-    char key_type[3];
-    char value_type[3];
     int len;
 
     int hash_seed;
