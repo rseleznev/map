@@ -142,6 +142,8 @@ void map_set_key(void* map_ptr, char* key, char* value) {
 
         return;
     }
+
+    // в данной группе нет места - пробируем след группы
 }
 
 void init_group_control_word(Group* group) {
@@ -191,7 +193,19 @@ int get_first_free_idx(long control_word) {
 // }
 
 char convert_long_to_bitmap(long l) {
+    unsigned char bit8 = (unsigned char)(l >> 56) & (unsigned char)128;
+    unsigned char bit7 = (unsigned char)(l >> 48) & (unsigned char)64;
+    unsigned char bit6 = (unsigned char)(l >> 40) & (unsigned char)32;
+    unsigned char bit5 = (unsigned char)(l >> 32) & (unsigned char)16;
+    unsigned char bit4 = (unsigned char)(l >> 24) & (unsigned char)8;
+    unsigned char bit3 = (unsigned char)(l >> 18) & (unsigned char)4;
+    unsigned char bit2 = (unsigned char)(l >> 8) & (unsigned char)2;
+    unsigned char bit1 = (unsigned char)(l & 1);
 
+    char res = 0xFF;
+    res &= bit8 | bit7 | bit6 | bit5 | bit4 | bit3 | bit2 | bit1;
+
+    return res;
 }
 
 long hash_string(char* str) {
