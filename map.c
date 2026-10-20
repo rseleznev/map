@@ -1,14 +1,12 @@
 #include "map.h"
+#include <string.h>
 #include <stdlib.h>
 // #include <immintrin.h>
 #include <mmintrin.h>
 
 typedef struct Slot {
     void* key;
-    int key_len;
-
     void* value;
-    int value_len;
 } Slot;
 
 typedef struct Group {
@@ -43,9 +41,11 @@ void* map_new(int len);
 void map_set_key(void* map_ptr, char* key, char* value);
 
 void init_group_control_word(Group* group);
-int group_first_free_slot_idx(Group* group);
+int get_idx_for_mask(long control_word, char mask);
+int get_first_free_idx(long control_word);
 int group_probe(Group* group, char mask);
 
+char convert_long_to_char(long l);
 long hash_string(char* str);
 
 void* map_new(int len) {
@@ -116,19 +116,39 @@ void map_set_key(void* map_ptr, char* key, char* value) {
     char h2 = (char)hash & (0xFF >> 1); // 7 младших битов
 
     Group* group = table->groups[(int)h1 & (table->len-1)];
-    
+    int i = get_idx_for_mask(group->control_word, h2);
+    if (i != -1) {
+        group->slots[i].key = key;
+        group->slots[i].value = value;
+
+        return;
+    }
 }
 
 void init_group_control_word(Group* group) {
-    __m64 vector = _mm_set_pi8((unsigned char)128, (unsigned char)128, (unsigned char)128, (unsigned char)128,
-    (unsigned char)128, (unsigned char)128, (unsigned char)128, (unsigned char)128);
+    __m64 vector = _mm_set1_pi8((unsigned char)128);
 
     long value = _m_to_int64(vector);
     group->control_word = value;
 }
 
-int group_first_free_slot_idx(Group* group) {
-    __m64 vector = _m_from_int64(group->control_word);
+int get_idx_for_mask(long control_word, char mask) {
+    __m64 vector = _m_from_int64(control_word);
+    __m64 vector_mask = _mm_set1_pi8((unsigned char)mask);
+    __m64 cmp = _mm_cmpeq_pi8(vector, vector_mask);
+
+    long value = _m_to_int64(vector);
+    char bitmap = convert_long_to_char(value);
+
+    if (bitmap == 0) {
+        return -1;
+    }
+
+    return __builtin_ctz((unsigned int)bitmap);
+}
+
+int get_first_free_idx(long control_word) {
+    __m64 vector = _m_from_int64(control_word);
     __m64 vector_mask = _mm_set1_pi8((unsigned char)128);
     __m64 cmp = _mm_cmpeq_pi8(vector, vector_mask);
 
@@ -146,6 +166,10 @@ int group_first_free_slot_idx(Group* group) {
 //     int bits = _mm_movemask_epi8(cmp);
 //     return bits != 0;
 // }
+
+char convert_long_to_char(long l) {
+
+}
 
 long hash_string(char* str) {
     return 0;
