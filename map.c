@@ -9,8 +9,6 @@ typedef struct Slot {
 
     void* value;
     int value_len;
-
-    char status;
 } Slot;
 
 typedef struct Group {
@@ -44,6 +42,7 @@ typedef struct Map {
 void* map_new(int len);
 void map_set_key(void* map_ptr, char* key, char* value);
 
+void init_group_control_word(Group* group);
 int group_first_free_slot_idx(Group* group);
 int group_probe(Group* group, char mask);
 
@@ -71,6 +70,7 @@ void* map_new(int len) {
 
     for (int group_idx = 0; group_idx < groups_amount; group_idx++) {
         Group* group = calloc(1, sizeof(Group));
+        init_group_control_word(group);
         groups_arr[group_idx] = group;
     }
 
@@ -119,12 +119,16 @@ void map_set_key(void* map_ptr, char* key, char* value) {
     
 }
 
-int group_first_free_slot_idx(Group* group) {
-    // __m64 vector = _mm_set_pi8(group->slots[0].status, group->slots[1].status, group->slots[2].status,
-    // group->slots[3].status, group->slots[4].status, group->slots[5].status, group->slots[6].status,
-    // group->slots[7].status);
-    __m64 vector = _m_from_int64(group->control_word);
+void init_group_control_word(Group* group) {
+    __m64 vector = _mm_set_pi8((unsigned char)128, (unsigned char)128, (unsigned char)128, (unsigned char)128,
+    (unsigned char)128, (unsigned char)128, (unsigned char)128, (unsigned char)128);
 
+    long value = _m_to_int64(vector);
+    group->control_word = value;
+}
+
+int group_first_free_slot_idx(Group* group) {
+    __m64 vector = _m_from_int64(group->control_word);
     __m64 vector_mask = _mm_set1_pi8((unsigned char)128);
     __m64 cmp = _mm_cmpeq_pi8(vector, vector_mask);
 
