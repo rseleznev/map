@@ -1,5 +1,4 @@
 #include "map.h"
-#include <string.h>
 #include <stdlib.h>
 // #include <immintrin.h>
 #include <mmintrin.h>
@@ -40,10 +39,13 @@ typedef struct Map {
 void* map_new(int len);
 void map_set_key(void* map_ptr, char* key, char* value);
 
+int group_try_insert(Group* group, char h2, char* key, char* value);
+
 void init_group_control_word(Group* group);
 int get_idx_for_mask(long control_word, char mask);
 int get_first_free_idx(long control_word);
-int group_probe(Group* group, char mask);
+
+int next_probe_idx(int curr_idx, int len, int step);
 
 char convert_long_to_bitmap(long l);
 long hash_string(char* str);
@@ -116,7 +118,26 @@ void map_set_key(void* map_ptr, char* key, char* value) {
     char h2 = (char)hash & (0xFF >> 1); // 7 младших битов
 
     Group* group = table->groups[(int)h1 & (table->len-1)];
+    if (group_try_insert(group, h2, key, value) == 0) {
+        return;
+    }
 
+    // в данной группе нет места - пробируем след группы
+    int group_idx = (int)h1 & (table->len-1);
+    if (group_idx + 1 >= table->len) {
+        group_idx = 0;
+    }
+
+    int probe_step = 1;
+    for (; group_idx < table->len; group_idx = next_probe_idx(group_idx, table->len, ++probe_step)) {
+        group = table->groups[group_idx];
+        if (group_try_insert(group, h2, key, value) == 0) {
+            return;
+        }
+    }
+}
+
+int group_try_insert(Group* group, char h2, char* key, char* value) {
     // ищем совпадение h2 в контрольном слове
     int i = get_idx_for_mask(group->control_word, h2);
     if (i != -1) {
@@ -125,7 +146,7 @@ void map_set_key(void* map_ptr, char* key, char* value) {
 
         // контрольное слово не меняется, т.к. оно уже равно h2
 
-        return;
+        return 0;
     }
 
     // ключа нет, ищем свободное место для вставки
@@ -140,10 +161,10 @@ void map_set_key(void* map_ptr, char* key, char* value) {
 
         group->control_word = control_word_new_part | control_word_old_part;
 
-        return;
+        return 0;
     }
 
-    // в данной группе нет места - пробируем след группы
+    return -1;
 }
 
 void init_group_control_word(Group* group) {
@@ -183,14 +204,21 @@ int get_first_free_idx(long control_word) {
     return __builtin_ctz((unsigned int)bitmap);
 }
 
-// int group_probe(Group* group, char mask) {
-//     __m128i vector = _mm_loadl_epi64((__m128i*)group->control_word);
-//     __m128i mask_vector = _mm_set1_epi8(mask);
-//     __m128i cmp = _mm_cmpeq_epi8(vector, mask_vector);
+int next_probe_idx(int curr_idx, int len, int step) {
+    /*
+        Нужно сделать закольцовку индекса, чтобы при curr_idx = 4, len = 5 и offset = 2 произошел сброс индекса до 0
+        и относительное смещение, т.е. чтобы получилось new_idx = 1
+    */
+    
+    int offset = curr_idx + step;
+    int new_idx = curr_idx + offset;
+    while (new_idx >= len) {
+        int available_incr = (len-1) - curr_idx;
+        new_idx = new_idx - (curr_idx - available_incr + 1);
+    }
 
-//     int bits = _mm_movemask_epi8(cmp);
-//     return bits != 0;
-// }
+    return offset;
+}
 
 char convert_long_to_bitmap(long l) {
     unsigned char bit8 = (unsigned char)(l >> 56) & (unsigned char)128;
