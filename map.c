@@ -11,7 +11,7 @@ typedef struct Slot {
 
 typedef struct Group {
     Slot slots[8];
-    long control_word;
+    unsigned long control_word;
 } Group;
 
 typedef struct Table {
@@ -45,7 +45,7 @@ int get_idx_for_mask(long control_word, char mask);
 int get_first_free_idx(long control_word);
 int group_probe(Group* group, char mask);
 
-char convert_long_to_char(long l);
+char convert_long_to_bitmap(long l);
 long hash_string(char* str);
 
 void* map_new(int len) {
@@ -116,10 +116,29 @@ void map_set_key(void* map_ptr, char* key, char* value) {
     char h2 = (char)hash & (0xFF >> 1); // 7 младших битов
 
     Group* group = table->groups[(int)h1 & (table->len-1)];
+
+    // ищем совпадение h2 в контрольном слове
     int i = get_idx_for_mask(group->control_word, h2);
     if (i != -1) {
         group->slots[i].key = key;
         group->slots[i].value = value;
+
+        // контрольное слово не меняется, т.к. оно уже равно h2
+
+        return;
+    }
+
+    // ключа нет, ищем свободное место для вставки
+    i = get_first_free_idx(group->control_word);
+    if (i != -1) {
+        group->slots[i].key = key;
+        group->slots[i].value = value;
+
+        unsigned long control_word_new_part = (long)h2 << 8*i;
+        unsigned long mask = 0xFF << 8*i;
+        unsigned long control_word_old_part = mask ^ 0xFFFFFFFFFFFFFFFF;
+
+        group->control_word = control_word_new_part | control_word_old_part;
 
         return;
     }
@@ -138,7 +157,7 @@ int get_idx_for_mask(long control_word, char mask) {
     __m64 cmp = _mm_cmpeq_pi8(vector, vector_mask);
 
     long value = _m_to_int64(vector);
-    char bitmap = convert_long_to_char(value);
+    unsigned char bitmap = convert_long_to_bitmap(value);
 
     if (bitmap == 0) {
         return -1;
@@ -153,9 +172,13 @@ int get_first_free_idx(long control_word) {
     __m64 cmp = _mm_cmpeq_pi8(vector, vector_mask);
 
     long value = _m_to_int64(cmp);
-    char mask = ( ((unsigned char)(value >> 49) & (unsigned char)128) | ((char)value >> 42) | ((char)value >> 35) |  ((char)value >> 28) |
-    ((char)value >> 21) | ((char)value >> 15) | ((char)value)
-    );
+    unsigned char bitmap = convert_long_to_bitmap(value);
+
+    if (bitmap == 0) {
+        return -1;
+    }
+
+    return __builtin_ctz((unsigned int)bitmap);
 }
 
 // int group_probe(Group* group, char mask) {
@@ -167,7 +190,7 @@ int get_first_free_idx(long control_word) {
 //     return bits != 0;
 // }
 
-char convert_long_to_char(long l) {
+char convert_long_to_bitmap(long l) {
 
 }
 
