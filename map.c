@@ -12,8 +12,6 @@ typedef struct Slot {
 typedef struct Group {
     Slot slots[8];
     unsigned long control_word;
-
-    int spreaded; // имеет данные в след группах (пробирование)
 } Group;
 
 typedef struct Table {
@@ -58,8 +56,9 @@ void init_group_control_word(Group* group);
 int get_bitmap(unsigned long control_word, unsigned char mask);
 void update_control_word_part(Group* group, int slot_idx, unsigned char new_part);
 
-Group* probe_insert_group(Table* table, int start_group_idx);
+int probe_group_for_insert(Table* table, int start_group_idx, unsigned h2, char* key, char* value);
 
+int incr_idx_cyclically(int start_idx, int incr_amount, int cycle_len);
 char convert_long_to_bitmap(unsigned long l);
 long hash_string(char* str);
 
@@ -151,13 +150,8 @@ void map_set_key(void* map_ptr, char* key, char* value) {
     }
 
     // в данной группе нет места - пробируем след группы
-    Group* probe_group = probe_insert_group(table, get_group_idx(table, h1));
-    if (probe_group != NULL) {
-        if (group_try_insert(probe_group, h2, key, value) == 0) {
-            group->spreaded = 1;
-            
-            return;
-        }
+    if (probe_group_for_insert(table, get_group_idx(table, h1), h2, key, value) == 0) {
+        return;
     }
     
     // нет свободных групп - увеличиваем таблицу
@@ -166,6 +160,7 @@ void map_set_key(void* map_ptr, char* key, char* value) {
 int group_try_insert(Group* group, unsigned char h2, char* key, char* value) {
     int slot_idx = get_matching_slot_idx(group, h2, key);
     if (slot_idx != -1) {
+        // ключ не меняется, т.к. он уже совпадает
         group->slots[slot_idx].value = value;
         // контрольное слово не меняется, т.к. оно уже равно h2
 
@@ -236,12 +231,12 @@ int get_first_available_slot_idx(Group* group) {
         return __builtin_ctz((unsigned int)bitmap);
     }
 
-    if (!group->spreaded) {
-        bitmap = get_bitmap(group->control_word, (unsigned char)254); // все удаленные слоты
-        if (bitmap != 0) {
-            return __builtin_ctz((unsigned int)bitmap);
-        }
-    }
+    // if (!group->spreaded) {
+    //     bitmap = get_bitmap(group->control_word, (unsigned char)254); // все удаленные слоты
+    //     if (bitmap != 0) {
+    //         return __builtin_ctz((unsigned int)bitmap);
+    //     }
+    // }
 
     return -1;
 }
@@ -272,20 +267,33 @@ void update_control_word_part(Group* group, int slot_idx, unsigned char new_part
     group->control_word = control_word_new_part | control_word_old_part;
 }
 
-Group* probe_insert_group(Table* table, int start_group_idx) {
-    /*
-        Нужно сделать закольцовку индекса, чтобы при curr_idx = 4, len = 5 и offset = 2 произошел сброс индекса до 0
-        и относительное смещение, т.е. чтобы получилось new_idx = 1
-    */
-    
-    int offset = curr_idx + step;
-    int new_idx = curr_idx + offset;
-    while (new_idx >= len) {
-        int available_incr = (len-1) - curr_idx;
-        new_idx = new_idx - (curr_idx - available_incr + 1);
+int probe_group_for_insert(Table* table, int start_group_idx, unsigned h2, char* key, char* value) {
+    int step = 1;
+    int offset_value = step;
+
+    while (step <= table->len) {
+        Group* probe_group = table->groups[incr_idx_cyclically(start_group_idx, offset_value, table->len)];
+        if (group_try_insert(probe_group, h2, key, value) == 0) {
+            return 0;
+        }
+
+        step++;
+        offset_value += step;
     }
 
-    return offset;
+    return -1;
+}
+
+// Надо хорошенько проверить
+int incr_idx_cyclically(int start_idx, int incr_amount, int cycle_len) {
+    int next_idx = start_idx + incr_amount;
+    while (next_idx >= cycle_len) {
+        int fill_curr_cycle = cycle_len - (start_idx+1);
+        int fill_next_cycle = incr_amount - fill_curr_cycle;
+        next_idx = fill_next_cycle;
+    }
+
+    return next_idx;
 }
 
 char convert_long_to_bitmap(unsigned long l) {
