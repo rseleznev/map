@@ -44,6 +44,7 @@ int group_try_insert(Group* group, char h2, char* key, char* value);
 void init_group_control_word(Group* group);
 int get_idx_for_mask(long control_word, char mask);
 int get_first_free_idx(long control_word);
+int get_first_dead_idx(long control_word);
 
 int next_probe_idx(int curr_idx, int len, int step);
 
@@ -192,6 +193,21 @@ int get_idx_for_mask(long control_word, char mask) {
 int get_first_free_idx(long control_word) {
     __m64 vector = _m_from_int64(control_word);
     __m64 vector_mask = _mm_set1_pi8((unsigned char)128);
+    __m64 cmp = _mm_cmpeq_pi8(vector, vector_mask);
+
+    long value = _m_to_int64(cmp);
+    unsigned char bitmap = convert_long_to_bitmap(value);
+
+    if (bitmap == 0) {
+        return -1;
+    }
+
+    return __builtin_ctz((unsigned int)bitmap);
+}
+
+int get_first_dead_idx(long control_word) {
+    __m64 vector = _m_from_int64(control_word);
+    __m64 vector_mask = _mm_set1_pi8((unsigned char)254);
     __m64 cmp = _mm_cmpeq_pi8(vector, vector_mask);
 
     long value = _m_to_int64(cmp);
