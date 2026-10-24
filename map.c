@@ -58,7 +58,7 @@ void update_control_word_part(Group* group, int slot_idx, unsigned char new_part
 
 int probe_group_for_insert(Table* table, int start_group_idx, unsigned h2, char* key, char* value);
 
-int incr_idx_cyclically(int start_idx, int incr_amount, int cycle_len);
+int incr_idx_looped(int start_idx, int incr_amount, int loop_len);
 char convert_long_to_bitmap(unsigned long l);
 long hash_string(char* str);
 
@@ -272,7 +272,7 @@ int probe_group_for_insert(Table* table, int start_group_idx, unsigned h2, char*
     int offset_value = step;
 
     while (step <= table->len) {
-        Group* probe_group = table->groups[incr_idx_cyclically(start_group_idx, offset_value, table->len)];
+        Group* probe_group = table->groups[incr_idx_looped(start_group_idx, offset_value, table->len)];
         if (group_try_insert(probe_group, h2, key, value) == 0) {
             return 0;
         }
@@ -285,10 +285,10 @@ int probe_group_for_insert(Table* table, int start_group_idx, unsigned h2, char*
 }
 
 // Надо хорошенько проверить
-int incr_idx_cyclically(int start_idx, int incr_amount, int cycle_len) {
+int incr_idx_looped(int start_idx, int incr_amount, int loop_len) {
     int next_idx = start_idx + incr_amount;
-    while (next_idx >= cycle_len) {
-        int fill_curr_cycle = cycle_len - (start_idx+1);
+    while (next_idx >= loop_len) {
+        int fill_curr_cycle = loop_len - (start_idx+1);
         int fill_next_cycle = incr_amount - fill_curr_cycle;
         next_idx = fill_next_cycle;
     }
