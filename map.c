@@ -59,7 +59,17 @@ long hash_string(char* str);
 
 void* map_new(int len) {
     if (len <= 8) {
-        // создаем только группу
+        // создаем только одну группу
+        Group* group = calloc(1, sizeof(Group));
+        init_group_control_word(group);
+
+        Map* map = malloc(sizeof(Map));
+        map->entries_len = 0;
+        map->global_depth = 0;
+        map->dir_ptr = (void*)group;
+        map->dir_len = 0;
+
+        return (void*)map;
     }
 
     int groups_amount = 2;
