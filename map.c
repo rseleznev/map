@@ -116,11 +116,19 @@ void* map_new(int len) {
 }
 
 int map_len(void* map_ptr) {
+    if (map_ptr == NULL) {
+        return -1;
+    }
+    
     Map* map = (Map*)map_ptr;
     return map->entries_len;
 }
 
 void map_set_key(void* map_ptr, char* key, char* value) {
+    if (map_ptr == NULL) {
+        return;
+    }
+    
     Map* map = (Map*)map_ptr;
     long hash = hash_string(key);
 
