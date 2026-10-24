@@ -11,6 +11,8 @@ typedef struct Slot {
 typedef struct Group {
     Slot slots[8];
     unsigned long control_word;
+
+    int spreaded; // имеет данные в след группах (пробирование)
 } Group;
 
 typedef struct Table {
@@ -37,7 +39,11 @@ typedef struct Map {
 } Map;
 
 void* map_new(int len);
+int map_len(void* map_ptr);
 void map_set_key(void* map_ptr, char* key, char* value);
+int map_has_key(void* map_ptr, char* key);
+void* map_get_key(void* map_prt, char* key);
+void map_delete_key(void* map_prt, char* key);
 
 int group_try_insert(Group* group, char h2, char* key, char* value);
 
@@ -97,6 +103,11 @@ void* map_new(int len) {
     map->dir_len = dir->len;
 
     return (void*)map;
+}
+
+int map_len(void* map_ptr) {
+    Map* map = (Map*)map_ptr;
+    return map->entries_len;
 }
 
 void map_set_key(void* map_ptr, char* key, char* value) {
@@ -171,7 +182,7 @@ int group_try_insert(Group* group, char h2, char* key, char* value) {
 void init_group_control_word(Group* group) {
     __m64 vector = _mm_set1_pi8((unsigned char)128);
 
-    long value = _m_to_int64(vector);
+    unsigned long value = _m_to_int64(vector);
     group->control_word = value;
 }
 
@@ -180,7 +191,7 @@ int get_idx_for_mask(long control_word, char mask) {
     __m64 vector_mask = _mm_set1_pi8((unsigned char)mask);
     __m64 cmp = _mm_cmpeq_pi8(vector, vector_mask);
 
-    long value = _m_to_int64(vector);
+    unsigned long value = _m_to_int64(vector);
     unsigned char bitmap = convert_long_to_bitmap(value);
 
     if (bitmap == 0) {
@@ -195,7 +206,7 @@ int get_first_free_idx(long control_word) {
     __m64 vector_mask = _mm_set1_pi8((unsigned char)128);
     __m64 cmp = _mm_cmpeq_pi8(vector, vector_mask);
 
-    long value = _m_to_int64(cmp);
+    unsigned long value = _m_to_int64(cmp);
     unsigned char bitmap = convert_long_to_bitmap(value);
 
     if (bitmap == 0) {
@@ -210,7 +221,7 @@ int get_first_dead_idx(long control_word) {
     __m64 vector_mask = _mm_set1_pi8((unsigned char)254);
     __m64 cmp = _mm_cmpeq_pi8(vector, vector_mask);
 
-    long value = _m_to_int64(cmp);
+    unsigned long value = _m_to_int64(cmp);
     unsigned char bitmap = convert_long_to_bitmap(value);
 
     if (bitmap == 0) {
