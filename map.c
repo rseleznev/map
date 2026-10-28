@@ -19,6 +19,14 @@ int get_group_idx(Table* table, unsigned long h1);
 int get_matching_slot_idx(Group* group, unsigned char h2, char* key);
 int get_first_available_slot_idx(Group* group);
 
+Map* init_small_map(void);
+Map* init_big_map(int groups_amount);
+void map_evolve(Map* map);
+void table_grow(Map* map, Table* table);
+
+Group* init_group(void);
+Table* init_table(int groups_amount);
+
 void init_control_word(Group* group);
 void update_control_word(Group* group, int slot_idx, unsigned char new_part);
 int get_bitmap(unsigned long control_word, unsigned char mask);
@@ -32,14 +40,7 @@ long hash_string(char* str);
 void* map_new(int len) {
     if (len <= 8) {
         // создаем только одну группу
-        Group* group = calloc(1, sizeof(Group));
-        init_group_control_word(group);
-
-        Map* map = malloc(sizeof(Map));
-        map->entries_len = 0;
-        map->global_depth = 0;
-        map->dir_ptr = (void*)group;
-        map->dir_len = 0;
+        Map* map = init_small_map();
 
         return (void*)map;
     }
@@ -53,36 +54,7 @@ void* map_new(int len) {
         break;
     }
 
-    if (groups_amount > 1024) {
-        // создаем несколько таблиц
-    }
-
-    Group** groups_arr = malloc(sizeof(Group) * groups_amount);
-
-    for (int group_idx = 0; group_idx < groups_amount; group_idx++) {
-        Group* group = calloc(1, sizeof(Group));
-        init_group_control_word(group);
-        groups_arr[group_idx] = group;
-    }
-
-    Table* table = malloc(sizeof(Table));
-    table->groups = groups_arr;
-    table->len = groups_amount;
-    table->local_depth = 0;
-    table->free_slots_len = groups_amount * 7;
-
-    Table** tables_arr = malloc(sizeof(Table) * 1);
-    tables_arr[0] = table;
-
-    Directory* dir = malloc(sizeof(Directory));
-    dir->tables = tables_arr;
-    dir->len = 1;
-
-    Map* map = malloc(sizeof(Map));
-    map->entries_len = 0;
-    map->global_depth = 0;
-    map->dir_ptr = (void*)dir;
-    map->dir_len = dir->len;
+    Map* map = init_big_map(groups_amount);
 
     return (void*)map;
 }
@@ -110,25 +82,35 @@ void map_set_key(void* map_ptr, char* key, char* value) {
         // работаем напрямую с группой
 
         Group* group = (Group*)map->dir_ptr;
-        group_try_insert(group, h2, key, value);
+        if (group_try_insert(group, h2, key, value) == 0) {
+            return;
+        }
 
-        return;
-    } 
-
-    Table* table = get_matching_table(map, hash);
-    Group* group = get_matching_group(table, h1);
-
-    // пробуем вставить в данную группу
-    if (group_try_insert(group, h2, key, value) == 0) {
-        return;
+        map_evolve(map);
     }
 
-    // в данной группе нет места - пробируем след группы
-    if (probe_group_for_insert(table, get_group_idx(table, h1), h2, key, value) == 0) {
-        return;
+    while (1) {
+        Table* table = get_matching_table(map, hash);
+        if (table->free_slots_len <= 0) {
+            grow_table(map, table);
+            continue;
+        }
+
+        Group* group = get_matching_group(table, h1);
+
+        // пробуем вставить в данную группу
+        if (group_try_insert(group, h2, key, value) == 0) {
+            return;
+        }
+
+        // в данной группе нет места - пробируем след группы
+        if (probe_group_for_insert(table, get_group_idx(table, h1), h2, key, value) == 0) {
+            return;
+        }
+        
+        // нет свободных групп - увеличиваем таблицу
+        grow_table(map, table);
     }
-    
-    // нет свободных групп - увеличиваем таблицу
 }
 
 int group_try_insert(Group* group, unsigned char h2, char* key, char* value) {
@@ -213,6 +195,73 @@ int get_first_available_slot_idx(Group* group) {
     // }
 
     return -1;
+}
+
+Map* init_small_map(void) {
+    Group* group = init_group();
+
+    Map* map = malloc(sizeof(Map));
+    map->entries_len = 0;
+    map->global_depth = 0;
+    map->dir_ptr = (void*)group;
+    map->dir_len = 0;
+
+    return map;
+}
+
+Map* init_big_map(int groups_amount) {
+    if (groups_amount > 1024) {
+        // создаем несколько таблиц
+    }
+
+    Group** groups_arr = malloc(sizeof(Group) * groups_amount);
+
+    for (int group_idx = 0; group_idx < groups_amount; group_idx++) {
+        Group* group = init_group();
+        groups_arr[group_idx] = group;
+    }
+
+    Table* table = init_table(groups_amount);
+    table->groups = groups_arr;
+
+    Table** tables_arr = malloc(sizeof(Table) * 1);
+    tables_arr[0] = table;
+
+    Directory* dir = malloc(sizeof(Directory));
+    dir->tables = tables_arr;
+    dir->len = 1;
+
+    Map* map = malloc(sizeof(Map));
+    map->entries_len = 0;
+    map->global_depth = 0;
+    map->dir_ptr = (void*)dir;
+    map->dir_len = dir->len;
+
+    return map;
+}
+
+void map_evolve(Map* map) {
+    
+}
+
+void table_grow(Map* map, Table* table) {
+
+}
+
+Group* init_group(void) {
+    Group* group = calloc(1, sizeof(Group));
+    init_group_control_word(group);
+
+    return group;
+}
+
+Table* init_table(int groups_amount) {
+    Table* table = malloc(sizeof(Table));
+    table->len = groups_amount;
+    table->local_depth = 0;
+    table->free_slots_len = groups_amount * 7;
+
+    return table;
 }
 
 void init_control_word(Group* group) {
