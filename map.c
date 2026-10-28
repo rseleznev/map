@@ -1,41 +1,8 @@
 #include "map.h"
+#include "models.h"
 #include <stdlib.h>
 #include <string.h>
-// #include <immintrin.h>
 #include <mmintrin.h>
-
-typedef struct Slot {
-    void* key;
-    void* value;
-} Slot;
-
-typedef struct Group {
-    Slot slots[8];
-    unsigned long control_word;
-} Group;
-
-typedef struct Table {
-    Group** groups;
-    int len;
-
-    int local_depth;
-    int free_slots_len;
-} Table;
-
-typedef struct Directory {
-    Table** tables;
-    int len;
-} Directory;
-
-typedef struct Map {
-    int entries_len;
-
-    int hash_seed;
-    int global_depth;
-
-    void* dir_ptr; // ссылка на директорию или группу
-    int dir_len;
-} Map;
 
 void* map_new(int len);
 int map_len(void* map_ptr);
@@ -145,6 +112,8 @@ void map_set_key(void* map_ptr, char* key, char* value) {
 
     Table* table = get_matching_table(map, hash);
     Group* group = get_matching_group(table, h1);
+
+    // пробуем вставить в данную группу
     if (group_try_insert(group, h2, key, value) == 0) {
         return;
     }
