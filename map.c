@@ -12,6 +12,7 @@ int map_has_key(void* map_ptr, char* key);
 void* map_get_key(void* map_prt, char* key);
 void map_delete_key(void* map_prt, char* key);
 
+int table_try_insert(Map* map, Table* table, unsigned long h1, unsigned long h2, char* key, char* value);
 int group_try_insert(Group* group, unsigned char h2, char* key, char* value);
 
 Table* get_matching_table(Map* map, unsigned long hash);
@@ -19,12 +20,16 @@ Group* get_matching_group(Table* table, unsigned long h1);
 int get_group_idx(Table* table, unsigned long h1);
 int get_matching_slot_idx(Group* group, unsigned char h2, char* key);
 int get_first_available_slot_idx(Group* group);
+int is_empty_slot(Group* group, int slot_idx);
+int is_dead_slot(Group* group, int slot_idx);
 
 Map* init_small_map(void);
 void free_small_map(Map* map);
 Map* init_big_map(int groups_amount);
 Map* map_evolve(Map* small_map);
-void table_grow(Map* map, Table* table);
+void table_grow(Map* map, Table** old_table);
+void table_split(Map* map, Table* table);
+void table_copy(Map* map, Table* from, Table* to);
 
 Group* init_group(void);
 Table* init_table(int groups_amount);
@@ -96,32 +101,39 @@ void map_set_key(void* map_ptr, char* key, char* value) {
 
     while (1) {
         Table* table = get_matching_table(map, hash);
-        if (table->free_slots_len <= 0) {
-            grow_table(map, table);
-            continue;
-        }
-
-        Group* group = get_matching_group(table, h1);
-
-        // пробуем вставить в данную группу
-        if (group_try_insert(group, h2, key, value) == 0) {
-            map->entries_len++;
-            table->free_slots_len--;
-            
-            return;
-        }
-
-        // в данной группе нет места - пробируем след группы
-        if (probe_group_for_insert(table, get_group_idx(table, h1), h2, key, value) == 0) {
-            map->entries_len++;
-            table->free_slots_len--;
-            
+        if (table_try_insert(map, table, h1, h2, key, value) == 0) {
             return;
         }
         
         // нет свободных групп - увеличиваем таблицу
-        grow_table(map, table);
+        table_grow(map, &table);
     }
+}
+
+int table_try_insert(Map* map, Table* table, unsigned long h1, unsigned long h2, char* key, char* value) {
+    if (table->free_slots_len <= 0) {
+        table_grow(map, &table);
+    }
+
+    Group* group = get_matching_group(table, h1);
+
+    // пробуем вставить в данную группу
+    if (group_try_insert(group, h2, key, value) == 0) {
+        map->entries_len++;
+        table->free_slots_len--;
+        
+        return 0;
+    }
+
+    // в данной группе нет места - пробируем след группы
+    if (probe_group_for_insert(table, get_group_idx(table, h1), h2, key, value) == 0) {
+        map->entries_len++;
+        table->free_slots_len--;
+        
+        return 0;
+    }
+
+    return -1;
 }
 
 int group_try_insert(Group* group, unsigned char h2, char* key, char* value) {
@@ -208,6 +220,10 @@ int get_first_available_slot_idx(Group* group) {
     return -1;
 }
 
+int is_empty_slot(Group* group, int slot_idx) {
+
+}
+
 Map* init_small_map(void) {
     Group* group = init_group();
 
@@ -230,18 +246,11 @@ void free_small_map(Map* map) {
 Map* init_big_map(int groups_amount) {
     if (groups_amount > 1024) {
         // создаем несколько таблиц
-    }
 
-    Group** groups_arr = malloc(sizeof(Group) * groups_amount);
-
-    for (int group_idx = 0; group_idx < groups_amount; group_idx++) {
-        Group* group = init_group();
-        groups_arr[group_idx] = group;
+        return;
     }
 
     Table* table = init_table(groups_amount);
-    table->groups = groups_arr;
-
     Table** tables_arr = malloc(sizeof(Table) * 1);
     tables_arr[0] = table;
 
@@ -276,8 +285,60 @@ Map* map_evolve(Map* small_map) {
     return new_map;
 }
 
-void table_grow(Map* map, Table* table) {
+void table_grow(Map* map, Table** old_table) {
+    if ((*old_table)->len == 1024) {
+        table_split(map, old_table);
 
+        return;
+    }
+
+    int new_groups_amount = (*old_table)->len * 2;
+    Table* new_table = init_table(new_groups_amount);
+    table_copy(map, old_table, new_table);
+    *old_table = new_table;
+}
+
+void table_split(Map* map, Table* table) {
+    if (table->local_depth < map->global_depth) {
+        // создаем 2 новые таблицы
+        // вставляем ссылки на них в уже существующие указатели в директории
+    }
+    else {
+        // создаем новые таблицы
+        // расширяем массив указателей в директории
+        // в новых указателях ставим ссылки на старые таблицы
+        // для новых таблиц в директории указываем соответствующие указатели
+    }
+}
+
+void table_copy(Map* map, Table* from, Table* to) {
+    for (int i = 0; i < from->len; i++) {
+        
+        Group* group = from->groups[i];
+        for (int j = 0; j < 8; j++) {
+            if (is_empty_slot(group, j) || is_dead_slot(group, j)) {
+                continue;
+            }
+            
+            char* key = group->slots[j].key;
+            char* value = group->slots[j].key;
+
+            unsigned long hash = hash_string(map->hash_seed, key);
+            unsigned long h1 = (hash >> 7) & 0xFFFFFFFFFFFFFFFF;
+            unsigned char h2 = (char)hash & (0xFF >> 1);
+
+            if (table_try_insert(map, to, h1, h2, key, value) == 0) {
+                continue;
+            }
+
+            // нет свободных групп - увеличиваем таблицу назначения
+            table_grow(map, &to);
+            j--; // откатываем итератор, чтобы повторно пройтись по этому элементу  
+        }
+        free(group);
+    }
+    free(from->groups);
+    free(from);
 }
 
 Group* init_group(void) {
@@ -288,10 +349,18 @@ Group* init_group(void) {
 }
 
 Table* init_table(int groups_amount) {
+    Group** groups_arr = malloc(sizeof(Group) * groups_amount);
+
+    for (int group_idx = 0; group_idx < groups_amount; group_idx++) {
+        Group* group = init_group();
+        groups_arr[group_idx] = group;
+    }
+    
     Table* table = malloc(sizeof(Table));
     table->len = groups_amount;
     table->local_depth = 0;
     table->free_slots_len = groups_amount * 7;
+    table->groups = groups_arr;
 
     return table;
 }
