@@ -27,7 +27,7 @@ typedef struct Directory {
 typedef struct Map {
     int entries_len;
 
-    int hash_seed;
+    unsigned long hash_seed;
     int global_depth;
 
     void* dir_ptr; // ссылка на директорию или группу

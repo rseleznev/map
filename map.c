@@ -1,5 +1,6 @@
 #include "map.h"
 #include "models.h"
+#include <time.h>
 #include <stdlib.h>
 #include <string.h>
 #include <mmintrin.h>
@@ -36,26 +37,27 @@ int probe_group_for_insert(Table* table, int start_group_idx, unsigned h2, char*
 
 int incr_idx_looped(int start_idx, int incr_amount, int loop_len);
 char convert_long_to_bitmap(unsigned long l);
-long hash_string(char* str);
+unsigned long hash_string(unsigned long seed, char* str);
 
 void* map_new(int len) {
+    Map* map = NULL;
+    
     if (len <= 8) {
         // создаем маленькую мапу с одной группой
-        Map* map = init_small_map();
-
-        return (void*)map;
+        map = init_small_map();
     }
-
-    int groups_amount = 2;
-    while (1) {
-        if (groups_amount * 7 <= len) {
-            groups_amount *= 2;
-            continue;
+    else {
+        int groups_amount = 2;
+        while (1) {
+            if (groups_amount * 7 <= len) {
+                groups_amount *= 2;
+                continue;
+            }
+            break;
         }
-        break;
-    }
 
-    Map* map = init_big_map(groups_amount);
+        map = init_big_map(groups_amount);    
+    }
 
     return (void*)map;
 }
@@ -75,7 +77,7 @@ void map_set_key(void* map_ptr, char* key, char* value) {
     }
     
     Map* map = (Map*)map_ptr;
-    unsigned long hash = hash_string(key);
+    unsigned long hash = hash_string(map->hash_seed, key);
     unsigned long h1 = (hash >> 7) & 0xFFFFFFFFFFFFFFFF; // 57 старших битов
     unsigned char h2 = (char)hash & (0xFF >> 1); // 7 младших битов
 
@@ -214,6 +216,7 @@ Map* init_small_map(void) {
     map->global_depth = 0;
     map->dir_ptr = (void*)group;
     map->dir_len = 0;
+    map->hash_seed = (unsigned long)time(NULL) ^ ((unsigned long)clock() << 16);
 
     return map;
 }
@@ -251,6 +254,7 @@ Map* init_big_map(int groups_amount) {
     map->global_depth = 0;
     map->dir_ptr = (void*)dir;
     map->dir_len = dir->len;
+    map->hash_seed = (unsigned long)time(NULL) ^ ((unsigned long)clock() << 16);
 
     return map;
 }
@@ -363,6 +367,14 @@ char convert_long_to_bitmap(unsigned long l) {
     return res;
 }
 
-long hash_string(char* str) {
-    return 0;
+unsigned long hash_string(unsigned long seed, char* str) {
+    unsigned long h = seed ^ 0x9E3779B97F4A7C15UL;
+
+    for (size_t i = 0; i < strlen(str); i++) {
+        h ^= (unsigned long)str[i];
+        h *= 1099511628211UL;
+        h ^= h >> 33;
+    }
+
+    return h;
 }
