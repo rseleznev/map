@@ -108,6 +108,11 @@ void map_set_key(void* map_ptr, char* key, char* value) {
 
     if (map->dir_len == 0) {
         // работаем напрямую с группой
+
+        Group* group = (Group*)map->dir_ptr;
+        group_try_insert(group, h2, key, value);
+
+        return;
     } 
 
     Table* table = get_matching_table(map, hash);
