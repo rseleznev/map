@@ -20,8 +20,9 @@ int get_matching_slot_idx(Group* group, unsigned char h2, char* key);
 int get_first_available_slot_idx(Group* group);
 
 Map* init_small_map(void);
+void free_small_map(Map* map);
 Map* init_big_map(int groups_amount);
-void map_evolve(Map* map);
+Map* map_evolve(Map* small_map);
 void table_grow(Map* map, Table* table);
 
 Group* init_group(void);
@@ -39,7 +40,7 @@ long hash_string(char* str);
 
 void* map_new(int len) {
     if (len <= 8) {
-        // создаем только одну группу
+        // создаем маленькую мапу с одной группой
         Map* map = init_small_map();
 
         return (void*)map;
@@ -83,10 +84,12 @@ void map_set_key(void* map_ptr, char* key, char* value) {
 
         Group* group = (Group*)map->dir_ptr;
         if (group_try_insert(group, h2, key, value) == 0) {
+            map->entries_len++;
+            
             return;
         }
 
-        map_evolve(map);
+        map = map_evolve(map);
     }
 
     while (1) {
@@ -100,11 +103,17 @@ void map_set_key(void* map_ptr, char* key, char* value) {
 
         // пробуем вставить в данную группу
         if (group_try_insert(group, h2, key, value) == 0) {
+            map->entries_len++;
+            table->free_slots_len--;
+            
             return;
         }
 
         // в данной группе нет места - пробируем след группы
         if (probe_group_for_insert(table, get_group_idx(table, h1), h2, key, value) == 0) {
+            map->entries_len++;
+            table->free_slots_len--;
+            
             return;
         }
         
@@ -209,6 +218,12 @@ Map* init_small_map(void) {
     return map;
 }
 
+void free_small_map(Map* map) {
+    Group* group = (Group*)map->dir_ptr;
+    free(group);
+    free(map);
+}
+
 Map* init_big_map(int groups_amount) {
     if (groups_amount > 1024) {
         // создаем несколько таблиц
@@ -240,8 +255,21 @@ Map* init_big_map(int groups_amount) {
     return map;
 }
 
-void map_evolve(Map* map) {
-    
+Map* map_evolve(Map* small_map) {
+    Map* new_map = init_big_map(2); // мапа эволюционирует только из группы, поэтому будет достаточно минимальной большой мапы
+
+    // Переносим данные
+    Group* group = (Group*)small_map->dir_ptr;
+    for (int i = 0; i < 8; i++) {
+        char* key = group->slots[i].key;
+        char* value = group->slots[i].value;
+
+        map_set_key(new_map, key, value);
+    }
+
+    free_small_map(small_map);
+
+    return new_map;
 }
 
 void table_grow(Map* map, Table* table) {
