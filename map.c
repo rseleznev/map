@@ -12,20 +12,20 @@ int map_has_key(void* map_ptr, char* key);
 void* map_get_key(void* map_prt, char* key);
 void map_delete_key(void* map_prt, char* key);
 
-int table_try_insert(Map* map, Table* table, unsigned long h1, unsigned long h2, char* key, char* value);
-int group_try_insert(Group* group, unsigned char h2, char* key, char* value);
-
 Map* init_small_map(void);
 void free_small_map(Map* map);
 Map* init_big_map(int groups_amount);
 Map* map_evolve(Map* small_map);
+
+int table_try_insert(Map* map, Table* table, unsigned long h1, unsigned long h2, char* key, char* value);
+int group_try_insert(Group* group, unsigned char h2, char* key, char* value);
+
+Table* init_table(int groups_amount);
 void table_grow(Map* map, Table** old_table);
 void table_split(Map* map, Table* table);
 void table_copy(Map* map, Table* from, Table* to);
 
 Group* init_group(void);
-Table* init_table(int groups_amount);
-
 int probe_group_for_insert(Table* table, int start_group_idx, unsigned h2, char* key, char* value);
 
 int incr_idx_looped(int start_idx, int incr_amount, int loop_len);
@@ -96,54 +96,6 @@ void map_set_key(void* map_ptr, char* key, char* value) {
     }
 }
 
-int table_try_insert(Map* map, Table* table, unsigned long h1, unsigned long h2, char* key, char* value) {
-    if (table->free_slots_len <= 0) {
-        table_grow(map, &table);
-    }
-
-    Group* group = get_matching_group(table, h1);
-
-    // пробуем вставить в данную группу
-    if (group_try_insert(group, h2, key, value) == 0) {
-        map->entries_len++;
-        table->free_slots_len--;
-        
-        return 0;
-    }
-
-    // в данной группе нет места - пробируем след группы
-    if (probe_group_for_insert(table, get_group_idx(table, h1), h2, key, value) == 0) {
-        map->entries_len++;
-        table->free_slots_len--;
-        
-        return 0;
-    }
-
-    return -1;
-}
-
-int group_try_insert(Group* group, unsigned char h2, char* key, char* value) {
-    int slot_idx = get_matching_slot_idx(group, h2, key);
-    if (slot_idx != -1) {
-        // ключ не меняется, т.к. он уже совпадает
-        group->slots[slot_idx].value = value;
-        // контрольное слово не меняется, т.к. оно уже равно h2
-
-        return 0;
-    }
-
-    slot_idx = get_first_available_slot_idx(group);
-    if (slot_idx != -1) {
-        group->slots[slot_idx].key = key;
-        group->slots[slot_idx].value = value;
-        update_control_word_part(group, slot_idx, h2);
-
-        return 0;
-    }
-
-    return -1;
-}
-
 Map* init_small_map(void) {
     Group* group = init_group();
 
@@ -203,6 +155,71 @@ Map* map_evolve(Map* small_map) {
     free_small_map(small_map);
 
     return new_map;
+}
+
+int table_try_insert(Map* map, Table* table, unsigned long h1, unsigned long h2, char* key, char* value) {
+    if (table->free_slots_len <= 0) {
+        table_grow(map, &table);
+    }
+
+    Group* group = get_matching_group(table, h1);
+
+    // пробуем вставить в данную группу
+    if (group_try_insert(group, h2, key, value) == 0) {
+        map->entries_len++;
+        table->free_slots_len--;
+        
+        return 0;
+    }
+
+    // в данной группе нет места - пробируем след группы
+    if (probe_group_for_insert(table, get_group_idx(table, h1), h2, key, value) == 0) {
+        map->entries_len++;
+        table->free_slots_len--;
+        
+        return 0;
+    }
+
+    return -1;
+}
+
+int group_try_insert(Group* group, unsigned char h2, char* key, char* value) {
+    int slot_idx = get_matching_slot_idx(group, h2, key);
+    if (slot_idx != -1) {
+        // ключ не меняется, т.к. он уже совпадает
+        group->slots[slot_idx].value = value;
+        // контрольное слово не меняется, т.к. оно уже равно h2
+
+        return 0;
+    }
+
+    slot_idx = get_first_available_slot_idx(group);
+    if (slot_idx != -1) {
+        group->slots[slot_idx].key = key;
+        group->slots[slot_idx].value = value;
+        update_control_word_part(group, slot_idx, h2);
+
+        return 0;
+    }
+
+    return -1;
+}
+
+Table* init_table(int groups_amount) {
+    Group** groups_arr = malloc(sizeof(Group) * groups_amount);
+
+    for (int group_idx = 0; group_idx < groups_amount; group_idx++) {
+        Group* group = init_group();
+        groups_arr[group_idx] = group;
+    }
+    
+    Table* table = malloc(sizeof(Table));
+    table->len = groups_amount;
+    table->local_depth = 0;
+    table->free_slots_len = groups_amount * 7;
+    table->groups = groups_arr;
+
+    return table;
 }
 
 void table_grow(Map* map, Table** old_table) {
@@ -266,23 +283,6 @@ Group* init_group(void) {
     init_group_control_word(group);
 
     return group;
-}
-
-Table* init_table(int groups_amount) {
-    Group** groups_arr = malloc(sizeof(Group) * groups_amount);
-
-    for (int group_idx = 0; group_idx < groups_amount; group_idx++) {
-        Group* group = init_group();
-        groups_arr[group_idx] = group;
-    }
-    
-    Table* table = malloc(sizeof(Table));
-    table->len = groups_amount;
-    table->local_depth = 0;
-    table->free_slots_len = groups_amount * 7;
-    table->groups = groups_arr;
-
-    return table;
 }
 
 int probe_group_for_insert(Table* table, int start_group_idx, unsigned h2, char* key, char* value) {
