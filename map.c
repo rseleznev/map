@@ -157,6 +157,7 @@ Map* map_evolve(Map* small_map) {
     return new_map;
 }
 
+// возможно лучше убрать Map* отсюда
 int table_try_insert(Map* map, Table* table, unsigned long h1, unsigned long h2, char* key, char* value) {
     if (table->free_slots_len <= 0) {
         table_grow(map, &table);
