@@ -52,9 +52,9 @@ int get_group_idx(Table* table, unsigned long h1);
 int get_matching_slot_idx(Group* group, unsigned char h2, char* key);
 int get_first_available_slot_idx(Group* group);
 
-void init_group_control_word(Group* group);
+void init_control_word(Group* group);
+void update_control_word(Group* group, int slot_idx, unsigned char new_part);
 int get_bitmap(unsigned long control_word, unsigned char mask);
-void update_control_word_part(Group* group, int slot_idx, unsigned char new_part);
 
 int probe_group_for_insert(Table* table, int start_group_idx, unsigned h2, char* key, char* value);
 
@@ -241,11 +241,19 @@ int get_first_available_slot_idx(Group* group) {
     return -1;
 }
 
-void init_group_control_word(Group* group) {
+void init_control_word(Group* group) {
     __m64 vector = _mm_set1_pi8((unsigned char)128);
 
     unsigned long value = _m_to_int64(vector);
     group->control_word = value;
+}
+
+void update_control_word(Group* group, int slot_idx, unsigned char new_part) {
+    unsigned long control_word_new_part = (long)new_part << 8*slot_idx;
+    unsigned long mask = 0xFF << 8*slot_idx;
+    unsigned long control_word_old_part = mask ^ 0xFFFFFFFFFFFFFFFF;
+
+    group->control_word = control_word_new_part | control_word_old_part;
 }
 
 int get_bitmap(unsigned long control_word, unsigned char mask) {
@@ -257,14 +265,6 @@ int get_bitmap(unsigned long control_word, unsigned char mask) {
     unsigned char bitmap = convert_long_to_bitmap(value);
 
     return (int)bitmap;
-}
-
-void update_control_word_part(Group* group, int slot_idx, unsigned char new_part) {
-    unsigned long control_word_new_part = (long)new_part << 8*slot_idx;
-    unsigned long mask = 0xFF << 8*slot_idx;
-    unsigned long control_word_old_part = mask ^ 0xFFFFFFFFFFFFFFFF;
-
-    group->control_word = control_word_new_part | control_word_old_part;
 }
 
 int probe_group_for_insert(Table* table, int start_group_idx, unsigned h2, char* key, char* value) {
