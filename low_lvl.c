@@ -1,5 +1,7 @@
 #include "low_lvl.h"
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <mmintrin.h>
 
 // публичные функции
@@ -67,6 +69,7 @@ int get_matching_slot_idx(Group* group, unsigned char h2, char* key) {
     int last_matching_idx = -1;
     int i = __builtin_ctz((unsigned int)bitmap);
     while (i > last_matching_idx && i <= 7) {
+        printf("!!! \n");
         if (strcmp(group->slots[i].key, key) == 0) {
             return i;
         }
@@ -108,7 +111,11 @@ int group_has_empty_slot(Group* group) {
 }
 
 int is_empty_slot(Group* group, int slot_idx) {
+    return 0;
+}
 
+int is_dead_slot(Group* group, int slot_idx) {
+    return 0;
 }
 
 void init_control_word(Group* group) {

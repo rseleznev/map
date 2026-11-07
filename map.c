@@ -148,7 +148,7 @@ Map* init_big_map(int groups_amount) {
     if (groups_amount > 1024) {
         // создаем несколько таблиц
 
-        return;
+        return NULL;
     }
 
     Table* table = init_table(groups_amount);
@@ -228,7 +228,7 @@ int table_has_key(Table* table, unsigned long h1, unsigned long h2, char* key) {
 }
 
 int group_try_insert(Group* group, unsigned char h2, char* key, char* value) {
-    int slot_idx = get_matching_slot_idx(group, h2, key);
+    int slot_idx = get_matching_slot_idx(group, h2, key); // разобраться, почему здесь возникает Segmentation fault при вставке
     if (slot_idx != -1) {
         // ключ не меняется, т.к. он уже совпадает
         group->slots[slot_idx].value = value;
@@ -241,7 +241,7 @@ int group_try_insert(Group* group, unsigned char h2, char* key, char* value) {
     if (slot_idx != -1) {
         group->slots[slot_idx].key = key;
         group->slots[slot_idx].value = value;
-        update_control_word_part(group, slot_idx, h2);
+        update_control_word(group, slot_idx, h2);
 
         return 0;
     }
@@ -281,7 +281,7 @@ int table_grow(Map* map, Table** old_table) {
 
     int new_groups_amount = (*old_table)->len * 2;
     Table* new_table = init_table(new_groups_amount);
-    table_copy(map, old_table, new_table);
+    table_copy(map, *old_table, new_table);
     *old_table = new_table;
 
     return 0;
@@ -396,7 +396,7 @@ void table_copy(Map* map, Table* from, Table* to) {
 
 Group* init_group(void) {
     Group* group = calloc(1, sizeof(Group));
-    init_group_control_word(group);
+    init_control_word(group);
 
     return group;
 }
