@@ -242,9 +242,11 @@ int table_grow(Map* map, Table** old_table) {
 }
 
 void table_split(Map* map, unsigned long hash) {
-    Table* table = get_matching_table(map, hash);
+    Table* table = get_matching_table(map, hash); // разделяемая таблица
     
     if (table->local_depth < map->global_depth) {
+        // массив указателей уже расширен, нужно только создать новые таблицы
+        
         // создаем 2 новые таблицы
         Table* new_table_1 = init_table(512);
         new_table_1->local_depth = map->global_depth;
@@ -267,24 +269,28 @@ void table_split(Map* map, unsigned long hash) {
 
         // расширяем массив указателей в директории
         Directory* dir = (Directory*)map->dir_ptr;
-        Table** old_tables = dir->tables;
+        Table** old_tables_arr = dir->tables;
         int old_tables_len = dir->len;
         dir->len *= 2;
-        Table** new_tables = malloc(sizeof(Table) * dir->len);
+        Table** new_tables_arr = malloc(sizeof(Table) * dir->len);
 
         // в новых указателях ставим ссылки на старые таблицы
         for (int i = 0, j = 0; i < old_tables_len; i++) {
             if (i == get_table_idx(map, hash)) {
                 // вместо разделяемой таблицы ставим указатели на новые таблицы
-                new_tables[j++] = new_table_1;
-                new_tables[j++] = new_table_2;
+                new_tables_arr[j++] = new_table_1;
+                new_tables_arr[j++] = new_table_2;
                 
                 continue;
             }
             
-            new_tables[j++] = old_tables[i];
-            new_tables[j++] = old_tables[i];
+            new_tables_arr[j++] = old_tables_arr[i];
+            new_tables_arr[j++] = old_tables_arr[i];
         }
+
+        free(old_tables_arr);
+        dir->tables = new_tables_arr;
+        map->global_depth++;
     }
 
     // переносим значения разделяемой таблицы
