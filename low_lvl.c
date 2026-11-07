@@ -4,6 +4,7 @@
 
 // публичные функции
 Table* get_matching_table(Map* map, unsigned long hash);
+int get_table_idx(Map* map, unsigned long hash);
 Group* get_matching_group(Table* table, unsigned long h1);
 int get_group_idx(Table* table, unsigned long h1);
 int get_matching_slot_idx(Group* group, unsigned char h2, char* key);
@@ -35,10 +36,14 @@ Table* get_matching_table(Map* map, unsigned long hash) {
         table = dir->tables[0];
     }
     else {
-        table = dir->tables[(int)hash >> (64 - map->global_depth)];
+        table = dir->tables[get_table_idx(map, hash)];
     }
 
     return table;
+}
+
+int get_table_idx(Map* map, unsigned long hash) {
+    return (int)hash >> (64 - map->global_depth);
 }
 
 Group* get_matching_group(Table* table, unsigned long h1) {

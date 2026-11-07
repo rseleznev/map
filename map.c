@@ -21,8 +21,8 @@ int table_try_insert(Map* map, Table* table, unsigned long h1, unsigned long h2,
 int group_try_insert(Group* group, unsigned char h2, char* key, char* value);
 
 Table* init_table(int groups_amount);
-void table_grow(Map* map, Table** old_table);
-void table_split(Map* map, Table* table);
+int table_grow(Map* map, Table** old_table);
+void table_split(Map* map, unsigned long hash);
 void table_copy(Map* map, Table* from, Table* to);
 
 Group* init_group(void);
@@ -92,7 +92,12 @@ void map_set_key(void* map_ptr, char* key, char* value) {
         }
         
         // нет свободных групп - увеличиваем таблицу
-        table_grow(map, &table);
+        if (table_grow(map, &table) == 0) {
+            return;
+        }
+
+        // таблица достигла максимума - делаем сплит
+        table_split(map, hash);
     }
 }
 
@@ -223,30 +228,83 @@ Table* init_table(int groups_amount) {
     return table;
 }
 
-void table_grow(Map* map, Table** old_table) {
+int table_grow(Map* map, Table** old_table) {
     if ((*old_table)->len == 1024) {
-        table_split(map, old_table);
-
-        return;
+        return -1;
     }
 
     int new_groups_amount = (*old_table)->len * 2;
     Table* new_table = init_table(new_groups_amount);
     table_copy(map, old_table, new_table);
     *old_table = new_table;
+
+    return 0;
 }
 
-void table_split(Map* map, Table* table) {
+void table_split(Map* map, unsigned long hash) {
+    Table* table = get_matching_table(map, hash);
+    
     if (table->local_depth < map->global_depth) {
         // создаем 2 новые таблицы
+        Table* new_table_1 = init_table(512);
+        new_table_1->local_depth = map->global_depth;
+
+        Table* new_table_2 = init_table(512);
+        new_table_2->local_depth = map->global_depth;
+
         // вставляем ссылки на них в уже существующие указатели в директории
+        Directory* dir = (Directory*)map->dir_ptr;
+        dir->tables[get_table_idx(map, hash)] = new_table_1;
+        dir->tables[get_table_idx(map, hash) + 1] = new_table_2;
     }
     else {
         // создаем новые таблицы
+        Table* new_table_1 = init_table(512);
+        new_table_1->local_depth++;
+
+        Table* new_table_2 = init_table(512);
+        new_table_2->local_depth++;
+
         // расширяем массив указателей в директории
+        Directory* dir = (Directory*)map->dir_ptr;
+        Table** old_tables = dir->tables;
+        int old_tables_len = dir->len;
+        dir->len *= 2;
+        Table** new_tables = malloc(sizeof(Table) * dir->len);
+
         // в новых указателях ставим ссылки на старые таблицы
-        // для новых таблиц в директории указываем соответствующие указатели
+        for (int i = 0, j = 0; i < old_tables_len; i++) {
+            if (i == get_table_idx(map, hash)) {
+                // вместо разделяемой таблицы ставим указатели на новые таблицы
+                new_tables[j++] = new_table_1;
+                new_tables[j++] = new_table_2;
+                
+                continue;
+            }
+            
+            new_tables[j++] = old_tables[i];
+            new_tables[j++] = old_tables[i];
+        }
     }
+
+    // переносим значения разделяемой таблицы
+    for (int i = 0; i < 1024; i++) {
+        
+        Group* group = table->groups[i];
+        for (int j = 0; j < 8; j++) {
+            if (is_empty_slot(group, j) || is_dead_slot(group, j)) {
+                continue;
+            }
+            
+            char* key = group->slots[j].key;
+            char* value = group->slots[j].key;
+
+            map_set_key((void*)map, key, value);
+        }
+        free(group);
+    }
+    free(table->groups);
+    free(table);
 }
 
 void table_copy(Map* map, Table* from, Table* to) {

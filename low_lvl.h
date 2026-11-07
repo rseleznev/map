@@ -4,6 +4,7 @@
 #include "models.h"
 
 Table* get_matching_table(Map* map, unsigned long hash);
+int get_table_idx(Map* map, unsigned long hash);
 Group* get_matching_group(Table* table, unsigned long h1);
 int get_group_idx(Table* table, unsigned long h1);
 int get_matching_slot_idx(Group* group, unsigned char h2, char* key);
