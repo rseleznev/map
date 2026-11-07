@@ -9,6 +9,7 @@ Group* get_matching_group(Table* table, unsigned long h1);
 int get_group_idx(Table* table, unsigned long h1);
 int get_matching_slot_idx(Group* group, unsigned char h2, char* key);
 int get_first_available_slot_idx(Group* group);
+int group_has_empty_slot(Group* group);
 int is_empty_slot(Group* group, int slot_idx);
 int is_dead_slot(Group* group, int slot_idx);
 

@@ -18,7 +18,9 @@ Map* init_big_map(int groups_amount);
 Map* map_evolve(Map* small_map);
 
 int table_try_insert(Map* map, Table* table, unsigned long h1, unsigned long h2, char* key, char* value);
+int table_has_key(Table* table, unsigned long h1, unsigned long h2, char* key);
 int group_try_insert(Group* group, unsigned char h2, char* key, char* value);
+int group_has_key(Group* group, unsigned char h2, char* key);
 
 Table* init_table(int groups_amount);
 int table_grow(Map* map, Table** old_table);
@@ -27,6 +29,7 @@ void table_copy(Map* map, Table* from, Table* to);
 
 Group* init_group(void);
 int probe_group_for_insert(Table* table, int start_group_idx, unsigned h2, char* key, char* value);
+int probe_group_has_key(Table* table, int start_group_idx, unsigned h2, char* key);
 
 int incr_idx_looped(int start_idx, int incr_amount, int loop_len);
 
@@ -93,12 +96,33 @@ void map_set_key(void* map_ptr, char* key, char* value) {
         
         // нет свободных групп - увеличиваем таблицу
         if (table_grow(map, &table) == 0) {
-            return;
+            continue;
         }
 
         // таблица достигла максимума - делаем сплит
         table_split(map, hash);
     }
+}
+
+int map_has_key(void* map_ptr, char* key) {
+    if (map_ptr == NULL) {
+        return 0;
+    }
+    
+    Map* map = (Map*)map_ptr;
+    unsigned long hash = hash_string(map->hash_seed, key);
+    unsigned long h1 = (hash >> 7) & 0xFFFFFFFFFFFFFFFF; // 57 старших битов
+    unsigned char h2 = (char)hash & (0xFF >> 1); // 7 младших битов
+
+    if (map->dir_len == 0) {
+        Group* group = (Group*)map->dir_ptr;
+
+        return group_has_key(group, h2, key);
+    }
+
+    Table* table = get_matching_table(map, hash);
+
+    return table_has_key(table, h1, h2, key);
 }
 
 Map* init_small_map(void) {
@@ -189,6 +213,20 @@ int table_try_insert(Map* map, Table* table, unsigned long h1, unsigned long h2,
     return -1;
 }
 
+int table_has_key(Table* table, unsigned long h1, unsigned long h2, char* key) {
+    Group* group = get_matching_group(table, h1);
+
+    if (get_matching_slot_idx(group, h2, key) != -1) {
+        return 1;
+    }
+
+    if (probe_group_has_key(table, get_group_idx(table, h1), h2, key) == 0) {
+        return 1;
+    }
+
+    return 0;
+}
+
 int group_try_insert(Group* group, unsigned char h2, char* key, char* value) {
     int slot_idx = get_matching_slot_idx(group, h2, key);
     if (slot_idx != -1) {
@@ -209,6 +247,14 @@ int group_try_insert(Group* group, unsigned char h2, char* key, char* value) {
     }
 
     return -1;
+}
+
+int group_has_key(Group* group, unsigned char h2, char* key) {
+    if (get_matching_slot_idx(group, h2, key) != -1) {
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
 Table* init_table(int groups_amount) {
@@ -291,7 +337,12 @@ void table_split(Map* map, unsigned long hash) {
         free(old_tables_arr);
         dir->tables = new_tables_arr;
         map->global_depth++;
+        map->dir_len = dir->len;
     }
+
+    /*
+        Подумать, что делать с удаленными слотами при переносе
+    */
 
     // переносим значения разделяемой таблицы
     for (int i = 0; i < 1024; i++) {
@@ -358,6 +409,26 @@ int probe_group_for_insert(Table* table, int start_group_idx, unsigned h2, char*
         Group* probe_group = table->groups[incr_idx_looped(start_group_idx, offset_value, table->len)];
         if (group_try_insert(probe_group, h2, key, value) == 0) {
             return 0;
+        }
+
+        step++;
+        offset_value += step;
+    }
+
+    return -1;
+}
+
+int probe_group_has_key(Table* table, int start_group_idx, unsigned h2, char* key) {
+    int step = 1;
+    int offset_value = step;
+
+    while (step <= table->len) {
+        Group* probe_group = table->groups[incr_idx_looped(start_group_idx, offset_value, table->len)];
+        if (group_has_key(probe_group, h2, key)) {
+            return 0;
+        }
+        if (group_has_empty_slot(probe_group)) {
+            return -1;
         }
 
         step++;

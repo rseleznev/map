@@ -9,6 +9,7 @@ Group* get_matching_group(Table* table, unsigned long h1);
 int get_group_idx(Table* table, unsigned long h1);
 int get_matching_slot_idx(Group* group, unsigned char h2, char* key);
 int get_first_available_slot_idx(Group* group);
+int group_has_empty_slot(Group* group);
 int is_empty_slot(Group* group, int slot_idx);
 int is_dead_slot(Group* group, int slot_idx);
 
@@ -21,6 +22,9 @@ unsigned long hash_string(unsigned long seed, char* str);
 static int get_bitmap(unsigned long control_word, unsigned char mask);
 
 static char convert_long_to_bitmap(unsigned long l);
+
+static const unsigned char empty_slot = (unsigned char)128;
+static const unsigned char dead_slot = (unsigned char)254;
 
 /*
 ==================
@@ -79,7 +83,7 @@ int get_matching_slot_idx(Group* group, unsigned char h2, char* key) {
 }
 
 int get_first_available_slot_idx(Group* group) {
-    int bitmap = get_bitmap(group->control_word, (unsigned char)128); // все свободные слоты
+    int bitmap = get_bitmap(group->control_word, empty_slot); // все свободные слоты
     if (bitmap != 0) {
         return __builtin_ctz((unsigned int)bitmap);
     }
@@ -94,12 +98,21 @@ int get_first_available_slot_idx(Group* group) {
     return -1;
 }
 
+int group_has_empty_slot(Group* group) {
+    int bitmap = get_bitmap(group->control_word, empty_slot);
+    if (bitmap == 0) {
+        return 0;
+    }
+
+    return 1;
+}
+
 int is_empty_slot(Group* group, int slot_idx) {
 
 }
 
 void init_control_word(Group* group) {
-    __m64 vector = _mm_set1_pi8((unsigned char)128);
+    __m64 vector = _mm_set1_pi8(empty_slot);
 
     unsigned long value = _m_to_int64(vector);
     group->control_word = value;
@@ -126,11 +139,12 @@ unsigned long hash_string(unsigned long seed, char* str) {
 }
 
 /*
-==================
-ПРИВАТНЫЕ ФУНКЦИИ
-==================
+    ==================
+    ПРИВАТНЫЕ ФУНКЦИИ
+    ==================
 */
 
+// Возвращает битовую карту вхождения mask в контрольное слово
 static int get_bitmap(unsigned long control_word, unsigned char mask) {
     __m64 vector = _m_from_int64(control_word);
     __m64 vector_mask = _mm_set1_pi8(mask);
@@ -142,6 +156,8 @@ static int get_bitmap(unsigned long control_word, unsigned char mask) {
     return (int)bitmap;
 }
 
+// Переводит 64-битную карту в 8-битную
+// 11111111 00000000 00000000 00000000 11111111 11111111 00000000 11111111 -> 10001101
 static char convert_long_to_bitmap(unsigned long l) {
     unsigned char bit8 = (unsigned char)(l >> 56) & (unsigned char)128;
     unsigned char bit7 = (unsigned char)(l >> 48) & (unsigned char)64;
