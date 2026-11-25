@@ -240,7 +240,7 @@ int group_try_insert(Group* group, unsigned char h2, char* key, char* value) {
     if (slot_idx != -1) {
         // ключ не меняется, т.к. он уже совпадает
         group->slots[slot_idx].value = value;
-        // контрольное слово не меняется, т.к. оно уже равно h2
+        // контрольное слово не меняется, т.к. оно уже содержит h2 слота
 
         return 1;
     }
