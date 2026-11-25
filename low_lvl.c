@@ -23,7 +23,7 @@ unsigned long hash_string(unsigned long seed, char* str);
 // приватные функции
 static int get_bitmap(unsigned long control_word, unsigned char mask);
 static char convert_long_to_bitmap(unsigned long l);
-unsigned long get_control_word_mask_wout_idx(unsigned long cw, int idx);
+unsigned long get_control_word_mask_wout_part(unsigned long cw, int part_idx);
 
 static const unsigned char empty_slot = (unsigned char)128;
 static const unsigned char dead_slot = (unsigned char)254;
@@ -130,7 +130,8 @@ void update_control_word(Group* group, int slot_idx, unsigned char new_part) {
     unsigned long mask = 0xFF << 8*slot_idx;
     unsigned long control_word_old_part = mask ^ 0xFFFFFFFFFFFFFFFF;
 
-    unsigned long old_value_mask = get_control_word_mask_wout_idx(group->control_word, slot_idx);
+    unsigned long old_value_mask = get_control_word_mask_wout_part(group->control_word, slot_idx);
+    printf("old_value_mask: %lu \n", old_value_mask);
 
     group->control_word = control_word_new_part | control_word_old_part;
 }
@@ -183,6 +184,18 @@ static char convert_long_to_bitmap(unsigned long l) {
     return res;
 }
 
-unsigned long get_control_word_mask_wout_idx(unsigned long cw, int idx) {
-    
+unsigned long get_control_word_mask_wout_part(unsigned long cw, int part_idx) {
+    unsigned long mask = 0;
+    unsigned char byte_mask = 0xFF;
+    int masking_byte = 0;
+
+    for (int p = 56; p >= 0; p -= 8) {
+        if (masking_byte++ == part_idx) {
+            continue;
+        }
+        
+        mask |= (unsigned long)byte_mask << p;
+    }
+
+    return mask;
 }

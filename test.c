@@ -45,7 +45,7 @@ int test_update_control_word() {
         if (group->control_word != test.expected_result) {
             printf("TEST: test_update_control_word: expected %lu, got %lu \n", test.expected_result, group->control_word);
             // print_binary(group->control_word);
-            print_binary(23925373020405760UL);
+            print_binary(18374967954648334335UL);
             return -1;
         }
     }
