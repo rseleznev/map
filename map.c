@@ -79,9 +79,13 @@ void map_set_key(void* map_ptr, char* key, char* value) {
         // работаем напрямую с группой
 
         Group* group = (Group*)map->dir_ptr;
-        if (group_try_insert(group, h2, key, value) == 0) {
+        int res = group_try_insert(group, h2, key, value);
+        if (res == 0) {
             map->entries_len++;
             
+            return;
+        }
+        if (res == 1) {
             return;
         }
 
@@ -195,10 +199,14 @@ int table_try_insert(Map* map, Table* table, unsigned long h1, unsigned long h2,
     Group* group = get_matching_group(table, h1);
 
     // пробуем вставить в данную группу
-    if (group_try_insert(group, h2, key, value) == 0) {
+    int res = group_try_insert(group, h2, key, value);
+    if (res == 0) {
         map->entries_len++;
         table->free_slots_len--;
         
+        return 0;
+    }
+    if (res == 1) {
         return 0;
     }
 
@@ -234,7 +242,7 @@ int group_try_insert(Group* group, unsigned char h2, char* key, char* value) {
         group->slots[slot_idx].value = value;
         // контрольное слово не меняется, т.к. оно уже равно h2
 
-        return 0;
+        return 1;
     }
 
     slot_idx = get_first_available_slot_idx(group);
